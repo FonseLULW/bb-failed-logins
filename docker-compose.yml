@@ -1,0 +1,25 @@
+# docker-compose.yml adapted from https://tecadmin.net/deploying-php-apache-and-mysql-with-docker-compose/
+version: '3'
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/var/www/html
+    ports:
+      - 8080:80
+    depends_on:
+      - mysql
+
+  mysql:
+    image: mysql:latest
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: example
+      # MYSQL_USER: example
+      # MYSQL_PASSWORD: example
+    ports:
+      - '3306:3306'
+    volumes:
+      - ./seed:/docker-entrypoint-initdb.d
