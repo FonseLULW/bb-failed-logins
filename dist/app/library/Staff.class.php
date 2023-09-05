@@ -14,6 +14,7 @@ class Staff
   private $isActive;
   private $created;
   private $deleted;
+  private $failedLoginsCount;
   private $resetPasswordHash;
 
   const RESET_PASSWORD_HASH_ENCRYPTION_METHOD = 'AES-128-ECB';
@@ -70,6 +71,7 @@ class Staff
         st.isActive,
         st.created,
         st.deleted,
+        st.failedLoginsCount,
         st.resetPasswordHash
         FROM staff st
         LEFT JOIN users u ON u.id = st.userId
@@ -94,6 +96,7 @@ class Staff
       $this->isActive          = $row['isActive'];
       $this->created           = $row['created'];
       $this->deleted           = $row['deleted'];
+      $this->failedLoginsCount = $row['failedLoginsCount'];
       $this->resetPasswordHash = $row['resetPasswordHash'];
     }
   }
@@ -108,6 +111,7 @@ class Staff
         password = '" . mysqli_real_escape_string($myDbLink, $this->password) . "',
         salt = '" . mysqli_real_escape_string($myDbLink, $this->salt) . "',
         isActive = '" . mysqli_real_escape_string($myDbLink, $this->isActive) . "',
+        failedLoginsCount = `" . mysqli_real_escape_string($myDbLink, $this->failedLoginsCount) . "`,
         resetPasswordHash = '" . mysqli_real_escape_string($myDbLink, $this->resetPasswordHash) . "'
         WHERE id = '" . mysqli_real_escape_string($myDbLink, $this->id) . "'";
     return $myDbLink->query($q);
@@ -337,6 +341,11 @@ class Staff
     return false;
   }
 
+  public function getFailedLoginsCount()
+  {
+    return $this->failedLoginsCount;
+  }
+
   public function getResetPasswordHash()
   {
     return $this->resetPasswordHash;
@@ -384,6 +393,11 @@ class Staff
     }
 
     $this->isActive = filter_var($value, FILTER_SANITIZE_NUMBER_INT);
+  }
+
+  public function setFailedLoginsCount($value)
+  {
+    $this->failedLoginsCount = $value;
   }
 
   public function setResetPasswordHash()
