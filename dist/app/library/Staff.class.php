@@ -186,7 +186,7 @@ class Staff
 
       $this->loadGeneric($q);
 
-      return $this->getId();
+      return true;
     }
 
     return false;

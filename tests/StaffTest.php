@@ -14,12 +14,14 @@ class StaffTest extends TestCase
     self::assertEquals($S->getName(), 'demo', 'Name was not correct');
   }
 
-  public function testAttemptLoginRightDomainReturnsTrue(): void
+  public function testAttemptLoginSuccess(): void
   {
     $S = new Staff();
-    $result = $S->attemptLogin('localhost', 'demo@example.com', ''); // need password
+    $result = $S->attemptLogin('localhost', 'demo', 'demo');
 
     self::assertTrue($result, 'Using right domain did not return true');
+    self::assertTrue($S->email, 'demo', 'Email was not correct');
+    self::assertTrue($S->domain, 'localhost', 'Domain was not correct');
   }
 
   public function testAttemptLoginWrongDomainReturnsFalse(): void
