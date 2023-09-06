@@ -111,7 +111,7 @@ class Staff
         password = '" . mysqli_real_escape_string($myDbLink, $this->password) . "',
         salt = '" . mysqli_real_escape_string($myDbLink, $this->salt) . "',
         isActive = '" . mysqli_real_escape_string($myDbLink, $this->isActive) . "',
-        failedLoginsCount = `" . mysqli_real_escape_string($myDbLink, $this->failedLoginsCount) . "`,
+        failedLoginsCount = " . mysqli_real_escape_string($myDbLink, $this->failedLoginsCount) . ",
         resetPasswordHash = '" . mysqli_real_escape_string($myDbLink, $this->resetPasswordHash) . "'
         WHERE id = '" . mysqli_real_escape_string($myDbLink, $this->id) . "'";
     return $myDbLink->query($q);
@@ -155,8 +155,18 @@ class Staff
 
   /**
    * Validate staff member and load their data on success.
-   *  1.  First get their salt
-   *  2.  Confirm email/password for this domain
+   *  1.  Get the encrypted password from MySQL database using domain and email
+   *  2.  Immediately return false if the failedLoginsCount >= 10
+   *  3.  Else, check password
+   *    a) If the staff member gave the correct password, 
+   *        - Load the Staff object
+   *        - Reset the staff member's failedLoginsCount to 0
+   *        - Return true
+   *    b) If the staff member gave an incorrect password,
+   *        - Increment the staff member's failedLoginsCount if failedLoginsCount < 10
+   *        - If failedLoginsCount reaches 10, set resetPasswordHash
+   *        - Return false
+   *  
    *
    * @return boolean     If their login credentials were correct.
    */
@@ -165,8 +175,8 @@ class Staff
   {
     global $myDbLink;
 
-    //1.
-    $q = "SELECT s.id, s.salt
+    // Get the encrypted password from MySQL database using domain and email
+    $q = "SELECT s.password, s.failedLoginsCount
       FROM staff s
       LEFT JOIN users u ON u.id = s.userId
       WHERE s.email = '" . mysqli_real_escape_string($myDbLink, $email) . "'
@@ -178,15 +188,42 @@ class Staff
 
     if (mysqli_num_rows($result) === 1) {
       $resultArray = mysqli_fetch_assoc($result);
-
       //2.
-      $q = "WHERE st.email = '" . mysqli_real_escape_string($myDbLink, $email) . "'
-        AND st.password = '" . mysqli_real_escape_string($myDbLink, self::cryptString($password, $resultArray['salt'])) . "'
+      if ($resultArray['failedLoginsCount'] >= 10)
+      {
+        return False;
+      }
+
+      //3.
+      if (password_verify($password, $resultArray['password']))
+      {
+        $q = "WHERE st.email = '" . mysqli_real_escape_string($myDbLink, $email) . "'
+        AND st.password = '" . mysqli_real_escape_string($myDbLink, $resultArray['password']) . "'
         AND u.domain = '" . mysqli_real_escape_string($myDbLink, $domain) . "'";
 
-      $this->loadGeneric($q);
+        $this->loadGeneric($q);
+        $this->setFailedLoginsCount(0);
+        $this->save();
 
-      return true;
+        return true;
+      }
+
+      $lock = null;
+      if ($resultArray['failedLoginsCount'] == 9) {
+        $this->setResetPasswordHash();
+        $lock = ", resetPasswordHash = '" . mysqli_real_escape_string($myDbLink, $this->getResetPasswordHash()) . "'";
+      }
+
+      $update = "UPDATE staff s
+        LEFT JOIN users u ON u.id = s.userId
+        SET failedLoginsCount = failedLoginsCount + 1" . $lock . "
+        WHERE s.email = '" . mysqli_real_escape_string($myDbLink, $email) . "'
+        AND u.domain = '" . mysqli_real_escape_string($myDbLink, $domain) . "'
+        AND s.isActive = 1
+        AND s.deleted IS NULL";
+      $myDbLink->query($update);
+      return false;
+      
     }
 
     return false;

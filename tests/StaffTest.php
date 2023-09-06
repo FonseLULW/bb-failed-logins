@@ -1,17 +1,28 @@
 <?php
 
 require_once __DIR__ . '/../dist/app/library/Staff.class.php';
+require_once __DIR__ . './../dist/app/library/database.php';
 
 use PHPUnit\Framework\TestCase;
 
 class StaffTest extends TestCase
 {
-  public function testAttemptLogin1(): void
+  public function getFailedLoginsCount($domain, $email): int
   {
-    $S = new Staff();
-    $S->load(1);
+    global $myDbLink;
+    $domain = mysqli_real_escape_string($myDbLink, $domain);
+    $email = mysqli_real_escape_string($myDbLink, $email);
+    $q = "SELECT s.failedLoginsCount
+    FROM staff s
+    LEFT JOIN users u ON u.id = s.userId
+    WHERE s.email = '$email'
+      AND u.domain = '$domain'
+      AND s.isActive = 1
+      AND s.deleted IS NULL";
 
-    self::assertEquals($S->getName(), 'demo', 'Name was not correct');
+    $result = mysqli_query($myDbLink, $q);
+    $failedLoginsCount = mysqli_fetch_assoc($result)['failedLoginsCount'];
+    return $failedLoginsCount;
   }
 
   public function testAttemptLoginSuccess(): void
@@ -20,59 +31,77 @@ class StaffTest extends TestCase
     $result = $S->attemptLogin('localhost', 'demo', 'demo');
 
     self::assertTrue($result, 'Using right domain did not return true');
-    self::assertTrue($S->email, 'demo', 'Email was not correct');
-    self::assertTrue($S->domain, 'localhost', 'Domain was not correct');
+    self::assertEquals('demo', $S->getEmail(), 'Email was not correct');
+    self::assertEquals(1, $S->getId(), 'Email was not correct');
   }
 
   public function testAttemptLoginWrongDomainReturnsFalse(): void
   {
     $S = new Staff();
-    $result = $S->attemptLogin('wronghost', 'demo@example.com', ''); // need password
+    $result = $S->attemptLogin('wronghost', 'demo', 'demo');
 
     self::assertFalse($result, 'Using wrong domain did not return false');
+    self::assertNull($S->getFailedLoginsCount(), 'Using wrong domain incorrectly set failedLoginsCount');
   }
 
-  public function testAttemptLoginWrongCredentials(): void
+  public function testAttemptLoginWrongEmailReturnsFalse(): void
   {
     $S = new Staff();
-    $result = $S->attemptLogin('localhost', 'demo@example.com', 'wrongpassword');
+    $result = $S->attemptLogin('wronghost', 'wrongemail', 'demo');
 
-    self::assertFalse($result, 'Using wrong credentials did not return false');
-    self::assertEquals($S->getFailedLoginsCount(), 1, 'Using wrong credentials did not increment failedLoginsCount from 0 to 1');
-
-    $result = $S->attemptLogin('localhost', 'demo@example.com', ''); // need password
-    self::assertTrue($result, 'Using right credentials did not return true');
-    self::assertEquals($S->getFailedLoginsCount(), 0, 'Using right credentials did not reset failedLoginsCount to 0');
+    self::assertFalse($result, 'Using wrong email did not return false');
+    self::assertNull($S->getFailedLoginsCount(), 'Using wrong email incorrectly set failedLoginsCount');
   }
 
-  public function testAttemptLoginFailsTenTimes(): void
+  public function testAttemptLoginWrongPasswordThenSuccess(): void
+  {
+    $S = new Staff();
+    $curFailedLoginsCount = $this->getFailedLoginsCount('localhost', 'demo');
+    $result = $S->attemptLogin('localhost', 'demo', 'wrongpassword');
+
+    self::assertFalse($result, 'Using wrong credentials did not return false');
+    self::assertEquals($curFailedLoginsCount + 1, $this->getFailedLoginsCount('localhost', 'demo'), 'Using wrong credentials did not increment failedLoginsCount from 0 to 1');
+
+    $result = $S->attemptLogin('localhost', 'demo', 'demo');
+    self::assertTrue($result, 'Using right credentials did not return true');
+    self::assertEquals(0, $this->getFailedLoginsCount('localhost', 'demo'), 'Using right credentials did not reset failedLoginsCount to 0');
+  }
+
+  public function testAttemptLoginWrongPasswordTenTimes(): void
   {
     $S = new Staff();
     for ($i = 0; $i < 10; ++$i)
     {
-      $result = $S->attemptLogin('localhost', 'demo@example.com', 'wrongpassword');
+      $curFailedLoginsCount = $this->getFailedLoginsCount('localhost', 'demo');
+      $result = $S->attemptLogin('localhost', 'demo', 'wrongpassword');
 
       self::assertFalse($result, 'Using wrong credentials did not return false');
-      self::assertEquals($S->getFailedLoginsCount(), $i + 1, 'Failed login did not increment failedLoginsCount');
+      self::assertEquals($curFailedLoginsCount + 1, $this->getFailedLoginsCount('localhost', 'demo'), 'Failed login did not increment failedLoginsCount');
     }
     $resetHash = $S->getResetPasswordHash();
     self::assertNotNull($resetHash, '10 failed login attempts did not set resetPasswordHash'); // test reset password hash
 
-    $result = $S->attemptLogin('localhost', 'demo@example.com', 'wrongpassword');
+    $result = $S->attemptLogin('localhost', 'demo', 'wrongpassword');
     self::assertFalse($result, 'Failed 11th attemptLogin did not return false');
-    self::assertNotEquals($resetHash, $S->getResetPasswordHash(), 'Failed 11th attemptLogin changed resetPasswordHash');
-    self::assertEquals($S->getFailedLoginsCount(), 10, 'Failed 11th attemptLogin incremented failedLoginsCount');
+    self::assertEquals($resetHash, $S->getResetPasswordHash(), 'Failed 11th attemptLogin changed resetPasswordHash');
+    self::assertEquals(10, $this->getFailedLoginsCount('localhost', 'demo'), 'Failed 11th attemptLogin incremented failedLoginsCount');
 
-    $result = $S->attemptLogin('localhost', 'demo@example.com', ''); // need correct password
+    $result = $S->attemptLogin('localhost', 'demo', 'demo');
     self::assertFalse($result, 'Using correct credentials past the 10th wrong attempt did not return false');
+    self::assertEquals(10, $this->getFailedLoginsCount('localhost', 'demo'), 'Correct credentials past the 10th attempt changed failedLoginsCount');
   }
 
-
-
-
-  // public function testAttemptLogin2(): void
-  // {
-  // }
-
-  // ...
+  protected function tearDown()
+  {
+    global $myDbLink;
+    
+    $teardown = "UPDATE staff s
+    LEFT JOIN users u ON u.id = s.userId
+    SET failedLoginsCount = 0, resetPasswordHash = ''
+    WHERE s.email = 'demo'
+      AND u.domain = 'localhost'
+      AND s.isActive = 1
+      AND s.deleted IS NULL";
+    $myDbLink->query($teardown);
+  }
 }
