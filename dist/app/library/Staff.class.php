@@ -166,11 +166,9 @@ class Staff
    *        - Increment the staff member's failedLoginsCount if failedLoginsCount < 10
    *        - If failedLoginsCount reaches 10, set resetPasswordHash
    *        - Return false
-   *  
    *
-   * @return boolean     If their login credentials were correct.
+   * @return boolean true if their login credentials were correct, else false.
    */
-  //maybe this should be using password_hash() and password_verify() instead of cryptString?
   public function attemptLogin($domain, $email, $password)
   {
     global $myDbLink;
@@ -188,19 +186,21 @@ class Staff
 
     if (mysqli_num_rows($result) === 1) {
       $resultArray = mysqli_fetch_assoc($result);
-      //2.
+
+      // After 10 unsuccessful attempts, always return false
       if ($resultArray['failedLoginsCount'] >= 10)
       {
-        return False;
+        return false;
       }
 
-      //3.
+      // Verify password
       if (password_verify($password, $resultArray['password']))
       {
         $q = "WHERE st.email = '" . mysqli_real_escape_string($myDbLink, $email) . "'
         AND st.password = '" . mysqli_real_escape_string($myDbLink, $resultArray['password']) . "'
         AND u.domain = '" . mysqli_real_escape_string($myDbLink, $domain) . "'";
 
+        // Load the Staff object, reset failedLoginsCount, save to the database
         $this->loadGeneric($q);
         $this->setFailedLoginsCount(0);
         $this->save();
@@ -208,12 +208,14 @@ class Staff
         return true;
       }
 
+      // On the 10th wrong attempt, set resetPasswordHash
       $lock = null;
       if ($resultArray['failedLoginsCount'] == 9) {
         $this->setResetPasswordHash();
         $lock = ", resetPasswordHash = '" . mysqli_real_escape_string($myDbLink, $this->getResetPasswordHash()) . "'";
       }
 
+      // Increment failedLoginsCount on unsuccessful attempts
       $update = "UPDATE staff s
         LEFT JOIN users u ON u.id = s.userId
         SET failedLoginsCount = failedLoginsCount + 1" . $lock . "
