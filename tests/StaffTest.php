@@ -144,7 +144,6 @@ class StaffTest extends TestCase
   {
     for ($i = 0; $i < 10; ++$i)
     {
-      $curFailedLoginsCount = $this->getFailedLoginsCount($this->correctDomain, $this->correctEmail);
       $result = $this->S->attemptLogin($this->correctDomain, $this->correctEmail, 'wrongpassword');
     }
     $resetHash = $this->S->getResetPasswordHash();
