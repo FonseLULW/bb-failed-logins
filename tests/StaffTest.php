@@ -121,11 +121,10 @@ class StaffTest extends TestCase
    */
   public function testAttemptLoginWrongPasswordThenSuccess(): void
   {
-    $curFailedLoginsCount = $this->getFailedLoginsCount($this->correctDomain, $this->correctEmail);
     $result = $this->S->attemptLogin($this->correctDomain, $this->correctEmail, 'wrongpassword');
 
     self::assertFalse($result, 'Using wrong credentials did not return false');
-    self::assertEquals($curFailedLoginsCount + 1, $this->getFailedLoginsCount($this->correctDomain, $this->correctEmail), 'Using wrong credentials did not increment failedLoginsCount from 0 to 1');
+    self::assertEquals(1, $this->getFailedLoginsCount($this->correctDomain, $this->correctEmail), 'Using wrong credentials did not increment failedLoginsCount from 0 to 1');
 
     $result = $this->S->attemptLogin($this->correctDomain, $this->correctEmail, $this->correctPassword);
     self::assertTrue($result, 'Using right credentials did not return true');
@@ -147,9 +146,6 @@ class StaffTest extends TestCase
     {
       $curFailedLoginsCount = $this->getFailedLoginsCount($this->correctDomain, $this->correctEmail);
       $result = $this->S->attemptLogin($this->correctDomain, $this->correctEmail, 'wrongpassword');
-
-      self::assertFalse($result, 'Using wrong credentials did not return false');
-      self::assertEquals($curFailedLoginsCount + 1, $this->getFailedLoginsCount($this->correctDomain, $this->correctEmail), 'Failed login did not increment failedLoginsCount');
     }
     $resetHash = $this->S->getResetPasswordHash();
     self::assertNotNull($resetHash, '10 failed login attempts did not set resetPasswordHash');

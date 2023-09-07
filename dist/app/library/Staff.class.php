@@ -17,6 +17,7 @@ class Staff
   private $failedLoginsCount;
   private $resetPasswordHash;
 
+  const MAX_FAILED_LOGINS_COUNT = 10;
   const RESET_PASSWORD_HASH_ENCRYPTION_METHOD = 'AES-128-ECB';
   const RESET_PASSWORD_HASH_KEY               = 'someRandomIrrelevantPassword__YDL,:h#>(A4jU5RA_Euf(M*+*Q~N2t*';
 
@@ -188,7 +189,7 @@ class Staff
       $resultArray = mysqli_fetch_assoc($result);
 
       // After 10 unsuccessful attempts, always return false
-      if ($resultArray['failedLoginsCount'] >= 10)
+      if ($resultArray['failedLoginsCount'] >= self::MAX_FAILED_LOGINS_COUNT)
       {
         return false;
       }
@@ -210,7 +211,7 @@ class Staff
 
       // On the 10th wrong attempt, set resetPasswordHash
       $lock = null;
-      if ($resultArray['failedLoginsCount'] == 9) {
+      if ($resultArray['failedLoginsCount'] == self::MAX_FAILED_LOGINS_COUNT - 1) {
         $this->setResetPasswordHash();
         $lock = ", resetPasswordHash = '" . mysqli_real_escape_string($myDbLink, $this->getResetPasswordHash()) . "'";
       }
@@ -221,7 +222,6 @@ class Staff
         SET failedLoginsCount = failedLoginsCount + 1" . $lock . "
         WHERE s.email = '" . mysqli_real_escape_string($myDbLink, $email) . "'
         AND u.domain = '" . mysqli_real_escape_string($myDbLink, $domain) . "'
-        AND s.isActive = 1
         AND s.deleted IS NULL";
       $myDbLink->query($update);
       return false;
